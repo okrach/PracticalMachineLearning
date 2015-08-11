@@ -1,0 +1,120 @@
+---
+title: "Machine Learning Study Based on Human Activity Recognition Data"
+author: "Jan Okrasinski"
+date: "Tuesday, August 11, 2015"
+output: html_document
+---
+
+# Machine Learning Study Based on Human Activity Recognition Data
+
+## Jan Okrasinski
+
+# Synopsis
+In order to automatically validate the correctness of performing a weight lifting exercise
+a predictive model has been built using classification tree algorithm improved via random forest
+procedure. Publicly licensed data has been used to train the model and assess its quality
+and successfully classify additional 20 cases in a blind test.
+
+# Question and approach
+As part of the Practical Machine Learning course administered by Coursera.Org a project has been
+assigned to participants to build a classification model and use it to make predictions.
+A dataset from the field of human activity recognition (HAR) has been chosen. It was originally
+collected by collaborators in a research group from Pontifical Catholic University of Rio de Janeiro 
+http://groupware.les.inf.puc-rio.br/har and is licensed for public use under the Creative Commons 
+license (CC BY-SA).
+
+The question asked in this study is :is data from four sets of sensors located on arm, forearm,
+belt and dumbbell worn by a subject performing Unilateral Dumbbell Biceps Curl sufficient
+to distinguish between five different fashions of doing the exercise ?
+
+As there are no obvious realtionship between features of the data and the resulting classification
+a natural choice is to use classification tree algorithm to identify some hidden characteristics and
+relate them to the fashions. To furthmore improve the quality of the solution multiple trees
+can be constructed through random forest approach in order to leverage majority voting
+among different trees and gain overall accuracy (reduce classification error rate).
+
+The package caret running within R platform is used to control the execution of the above procedures. 
+ 
+# Input data and tidying
+The training and test dataset consist of 19622 and 20 observations, respectively, with 160 variables: 159 measurements and classification (training sample) or problem_id (testing sample).
+```{r}
+library(caret); library(dplyr)
+set.seed(2345)
+train <- read.csv("pml-training.csv")
+test <- read.csv("pml-testing.csv")
+dim(train)
+dim(test)
+```
+
+It is pointless to build model based on variables which have missing values (NA) in the test
+dataset, so let's remove them from the training dataset as well:
+
+```{r}
+train <- train[,!apply(test,2,anyNA)]
+```
+
+Finally let's make sure that different fashions lead to different distributions of at least some
+variables (i.e. that there is some signal in the data to look for):
+
+```{r}
+qplot(roll_belt,pitch_forearm,colour=classe,data=trainTr)
+```
+
+It is seen that for roll_belt>130 there are almost only classe=E records. Other variables may exhibit
+similar features enabling for complete and reliable distinction between all the fasions (i.e. values
+of the class variable).
+
+# Training
+In order to evaluate out of sample error rate the training sample is split into pure training and
+validation subsamples:
+
+```{r}
+inTrain <- createDataPartition(train$X,p=0.75,list=FALSE)
+trainTr <- train[inTrain,]
+trainTe <- train[-inTrain,]
+```
+
+For building the model only scalar variables are chosen excluding vector component variables
+(x,y,z). A tree model wih random forest improvement is trained here:
+```{r,cache=TRUE}
+modTree <- train(classe ~ ., model="tree",select(trainTr,classe,starts_with("roll"),
+                                                 starts_with("pitch"),starts_with("yaw"),
+                                                 starts_with("total")))
+```
+
+#Results
+
+The summary of the model quality based on the pure training subsample alone is:
+```{r}
+print(modTree$finalModel)
+```
+Confusion matrix is dominated by the diagonal elements with classification error rates for each
+class being below 2%.
+
+OOB estimate of the global error rate of slightly more than 1% may be compared to the error rate
+calculated for the validation subsample:
+
+```{r}
+sum((predict(modTree,newdata=trainTe)!=trainTe$classe)*1)/length(trainTe$classe)
+```
+
+The latter is smaller but not very much different.
+
+Based on the more conservative OOB estimate the probability that the model
+will classify correctly all the 20 cases from the test sample exceeds 80%:
+```{r}
+1-(1-0.0107)^20
+```
+
+The actual predictions:
+```{r}
+predict(modTree,newdata=test)
+```
+were all correct (based on the feedback from coursera.org).
+
+# Conclusions
+
+Model obtained using default parameters of the random forest algorithm without any tuning
+achieved accuracy of about 1%. It is admitted that the process of achieving this result
+was not as smooth and straightforward as it might seem from this report but the result
+was worth the effort.
